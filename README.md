@@ -30,6 +30,13 @@ SDK 的作用是把客户端侧容易漂移、容易复制粘贴的底层逻辑�
 - v1：引入通用 `Broker/Awaiter`（请求-响应等待语义：timeout/cancel/重复 req_id 防护等）
 - v2：按需增加子协议 client（例如 management/auth/varstore 的强类型封装），但会坚持“小步多 PR”
 
+## v1（已实现）：Awaiter（按 MsgID + SubProto + Action 等待响应）
+
+v1 在 SDK 内新增 `await` 包，用于在客户端侧统一“请求-响应等待语义”：
+- key：`MsgID + SubProto + Action`
+- `SendAndAwait` 会在请求 header 的 `MsgID==0` 时自动生成非 0 MsgID 并写回 header
+- 匹配成功的响应帧会被投递并拦截（不会重复转交给 onUnmatched）；未匹配帧不吞
+
 ## 快速示例（概念）
 
 > 示例仅展示“如何组帧/封装 payload”，不代表完整业务流程（例如 login/register）。
@@ -50,6 +57,25 @@ hdr := (&header.HeaderTcp{}).
   WithPayloadLength(uint32(len(payload)))
 
 _ = sess.Send(hdr, payload)
+```
+
+> v1 示例：发送并等待响应（按 MsgID + SubProto + Action 匹配）
+
+```go
+c := await.NewClient(context.Background(),
+  func(h core.IHeader, payload []byte) { /* unmatched frames */ },
+  func(err error) { /* onError */ },
+)
+_ = c.Connect("127.0.0.1:9000")
+
+payload, _ := transport.EncodeMessage("login", map[string]any{"device_id":"d","node_id":1})
+hdr := (&header.HeaderTcp{}).WithMajor(header.MajorCmd).WithSubProto(2).WithSourceID(1).WithTargetID(0)
+
+ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+defer cancel()
+resp, err := c.SendAndAwait(ctx, hdr, payload, "login_resp")
+_ = resp
+_ = err
 ```
 
 ## 开发备注（开发期）
