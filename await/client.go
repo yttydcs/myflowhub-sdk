@@ -107,7 +107,10 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 	}
 
 	if hdr.GetMsgID() == 0 {
-		hdr.WithMsgID(nextMsgID())
+		hdr = hdr.WithMsgID(nextMsgID())
+		if hdr.GetMsgID() == 0 {
+			return Response{}, errors.New("msg_id generate failed")
+		}
 	}
 
 	k := Key{MsgID: hdr.GetMsgID(), SubProto: hdr.SubProto(), Action: expectAction}
@@ -134,7 +137,10 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 		// 尽量避免“响应与 ctx 同时到达”时误判为超时/取消：ctx 触发后再尝试读一次。
 		select {
 		case r, ok := <-ch:
-			if ok && r.Err == nil {
+			if ok {
+				if r.Err != nil {
+					return Response{}, r.Err
+				}
 				return r.Response, nil
 			}
 		default:
