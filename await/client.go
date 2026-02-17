@@ -48,6 +48,7 @@ func nextMsgID() uint32 {
 type Client struct {
 	sess        *session.Session
 	broker      *Broker
+	onFrame     func(core.IHeader, []byte)
 	onUnmatched func(core.IHeader, []byte)
 	onError     func(error)
 }
@@ -60,6 +61,15 @@ func NewClient(ctx context.Context, onUnmatched func(core.IHeader, []byte), onEr
 	}
 	c.sess = session.New(ctx, c.handleFrame, c.handleError)
 	return c
+}
+
+// SetOnFrame 设置一个可选的“全帧 tap”：收到任何帧都会回调（包括将被 deliver 的帧）。
+// 注意：该回调运行于底层 readLoop 线程，调用方应确保回调轻量且不阻塞。
+func (c *Client) SetOnFrame(onFrame func(core.IHeader, []byte)) {
+	if c == nil {
+		return
+	}
+	c.onFrame = onFrame
 }
 
 func (c *Client) Connect(addr string) error {
@@ -152,6 +162,10 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 func (c *Client) handleFrame(hdr core.IHeader, payload []byte) {
 	if hdr == nil || c == nil || c.broker == nil {
 		return
+	}
+
+	if c.onFrame != nil {
+		c.onFrame(hdr, payload)
 	}
 
 	msgID := hdr.GetMsgID()

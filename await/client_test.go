@@ -47,10 +47,12 @@ func TestClient_SendAndAwait_AutoMsgID(t *testing.T) {
 	}()
 
 	unmatched := make(chan struct{}, 1)
+	allFrames := make(chan struct{}, 8)
 	client := NewClient(context.Background(),
 		func(_hdr core.IHeader, _payload []byte) { unmatched <- struct{}{} },
 		func(err error) { _ = err },
 	)
+	client.SetOnFrame(func(_hdr core.IHeader, _payload []byte) { allFrames <- struct{}{} })
 	defer client.Close()
 
 	if err := client.Connect(ln.Addr().String()); err != nil {
@@ -79,6 +81,12 @@ func TestClient_SendAndAwait_AutoMsgID(t *testing.T) {
 	}
 	if resp.Message.Action != "login_resp" {
 		t.Fatalf("unexpected action: %q", resp.Message.Action)
+	}
+
+	select {
+	case <-allFrames:
+	default:
+		t.Fatalf("expected onFrame callback")
 	}
 	select {
 	case <-unmatched:
