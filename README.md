@@ -20,14 +20,16 @@ SDK 的作用是把客户端侧容易漂移、容易复制粘贴的底层逻辑�
   - 标准库
 - SDK **禁止**依赖 `myflowhub-server` 或 `myflowhub-win`（避免循环依赖与架构倒挂）。
 
-## 当前版本（v0）范围
+## 当前能力（截至 v0.1.0）
 
-本仓库当前聚焦 **最小可用 v0**：
-- `session`：TCP Session（connect/close/send/readloop），统一 HeaderTcp v2 编解码与默认字段补齐（`trace_id`/`hop_limit`）
-- `transport`：`action+data` JSON envelope 的编码/解码
+> 注：下文的 “v0/v1/v2” 是**能力阶段编号**（不是 semver tag）。
 
-后续演进（计划）：
-- v1：引入通用 `Broker/Awaiter`（请求-响应等待语义：timeout/cancel/重复 req_id 防护等）
+当前 `v0.1.0` 已包含：
+- v0：`session`：TCP Session（connect/close/send/readloop），统一 HeaderTcp v2 编解码与默认字段补齐（`trace_id`/`hop_limit`）
+- v0：`transport`：`action+data` JSON envelope 的编码/解码
+- v1：`await`：通用 Awaiter（请求-响应等待语义：timeout/cancel/重复 req_id 防护等；已实现，见下文）
+
+未来演进（计划）：
 - v2：按需增加子协议 client（例如 management/auth/varstore 的强类型封装），但会坚持“小步多 PR”
 
 ## v1（已实现）：Awaiter（按 MsgID + SubProto + Action 等待响应）
@@ -78,8 +80,8 @@ _ = resp
 _ = err
 ```
 
-## 开发备注（开发期）
+## 开发备注（联调与验收）
 
-本仓库在开发期可能使用 `go.mod` 的 `replace` 指向同级目录的 Core/Proto（便于多仓联调）。
-后续会通过为 Core/Proto 打 tag 并移除 replace 来让仓库在“独立 clone”时也可直接构建。
+- 本地多仓联调：推荐使用工作区根目录的 `go.work`（不提交），以便跨仓联动开发。
+- 单仓验收/发布验证：使用 `GOWORK=off go test ./... -count=1 -p 1`，确保无本地 replace 依赖。
 
