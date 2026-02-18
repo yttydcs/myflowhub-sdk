@@ -12,6 +12,7 @@ import (
 
 	core "github.com/yttydcs/myflowhub-core"
 	"github.com/yttydcs/myflowhub-core/header"
+	protocolfile "github.com/yttydcs/myflowhub-proto/protocol/file"
 	"github.com/yttydcs/myflowhub-sdk/session"
 	"github.com/yttydcs/myflowhub-sdk/transport"
 )
@@ -185,7 +186,12 @@ func (c *Client) handleFrame(hdr core.IHeader, payload []byte) {
 		return
 	}
 
-	msg, err := transport.DecodeMessage(payload)
+	decodePayload := payload
+	if sub == protocolfile.SubProtoFile && len(payload) > 0 && payload[0] == protocolfile.KindCtrl {
+		decodePayload = payload[1:]
+	}
+
+	msg, err := transport.DecodeMessage(decodePayload)
 	if err != nil {
 		if c.onUnmatched != nil {
 			c.onUnmatched(hdr, payload)
