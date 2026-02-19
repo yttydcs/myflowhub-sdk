@@ -23,7 +23,7 @@ SDK v1 已提供 `await.Client.SendAndAwait`（按 `MsgID + SubProto + Action` �
 
 ### 文档
 - `plan.md`：本 workflow 的需求/架构/计划与验收
-- `plan_archive_2026-02-16_sdk-v1-await.md`：归档上一轮计划文档（便于审计回放）
+- `docs/plan_archive/plan_archive_2026-02-16_sdk-v1-await.md`：归档上一轮计划文档（便于审计回放）
 
 ## plan.md 任务映射
 - SAH1 - SDK：await.Client 增加 onFrame hook ✅
