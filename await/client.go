@@ -13,6 +13,7 @@ import (
 	core "github.com/yttydcs/myflowhub-core"
 	"github.com/yttydcs/myflowhub-core/header"
 	protocolfile "github.com/yttydcs/myflowhub-proto/protocol/file"
+	protocolvarstore "github.com/yttydcs/myflowhub-proto/protocol/varstore"
 	"github.com/yttydcs/myflowhub-sdk/session"
 	"github.com/yttydcs/myflowhub-sdk/transport"
 )
@@ -180,10 +181,14 @@ func (c *Client) handleFrame(hdr core.IHeader, payload []byte) {
 
 	maj := hdr.Major()
 	if maj != header.MajorOKResp && maj != header.MajorErrResp {
-		if c.onUnmatched != nil {
-			c.onUnmatched(hdr, payload)
+		// VarStore 的逐跳回程响应改为 MajorCmd，为 await 保留一个严格的白名单兼容路径：仅限 VarStore 子协议。
+		// 其它子协议继续只接受 OKResp/ErrResp，避免普通 Cmd 帧被误匹配吞掉。
+		if !(maj == header.MajorCmd && sub == protocolvarstore.SubProtoVarStore) {
+			if c.onUnmatched != nil {
+				c.onUnmatched(hdr, payload)
+			}
+			return
 		}
-		return
 	}
 
 	decodePayload := payload

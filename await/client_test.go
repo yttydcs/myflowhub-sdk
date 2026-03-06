@@ -11,6 +11,7 @@ import (
 	core "github.com/yttydcs/myflowhub-core"
 	"github.com/yttydcs/myflowhub-core/header"
 	protocolfile "github.com/yttydcs/myflowhub-proto/protocol/file"
+	protocolvarstore "github.com/yttydcs/myflowhub-proto/protocol/varstore"
 	"github.com/yttydcs/myflowhub-sdk/transport"
 )
 
@@ -302,5 +303,149 @@ func TestClient_SendAndAwait_FileCtrlKindPrefixDecoded(t *testing.T) {
 	case <-unmatched:
 		t.Fatalf("unexpected unmatched callback")
 	default:
+	}
+}
+
+func TestClient_SendAndAwait_VarStoreRespMajorCmdDelivered(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	serverDone := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		codec := header.HeaderTcpCodec{}
+		reqHdr, _, err := codec.Decode(bufio.NewReader(conn))
+		if err != nil {
+			return
+		}
+
+		respPayload, _ := transport.EncodeMessage(protocolvarstore.ActionSetResp, map[string]any{
+			"code":       1,
+			"msg":        "ok",
+			"name":       "n",
+			"value":      "v",
+			"owner":      1,
+			"visibility": "public",
+			"type":       "string",
+		})
+		respHdr := (&header.HeaderTcp{}).
+			WithMajor(header.MajorCmd).
+			WithSubProto(reqHdr.SubProto()).
+			WithMsgID(reqHdr.GetMsgID()).
+			WithPayloadLength(uint32(len(respPayload)))
+		frame, _ := codec.Encode(respHdr, respPayload)
+		_, _ = conn.Write(frame)
+		<-serverDone
+	}()
+
+	unmatched := make(chan struct{}, 1)
+	client := NewClient(context.Background(),
+		func(_hdr core.IHeader, _payload []byte) { unmatched <- struct{}{} },
+		func(err error) { _ = err },
+	)
+	defer client.Close()
+
+	if err := client.Connect(ln.Addr().String()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	reqPayload, _ := transport.EncodeMessage(protocolvarstore.ActionSet, map[string]any{
+		"name":       "n",
+		"value":      "v",
+		"visibility": "public",
+		"owner":      1,
+	})
+	reqHdr := (&header.HeaderTcp{}).
+		WithMajor(header.MajorCmd).
+		WithSubProto(protocolvarstore.SubProtoVarStore).
+		WithSourceID(1).
+		WithTargetID(0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	resp, err := client.SendAndAwait(ctx, reqHdr, reqPayload, protocolvarstore.ActionSetResp)
+	close(serverDone)
+	if err != nil {
+		t.Fatalf("send&await: %v", err)
+	}
+	if resp.Message.Action != protocolvarstore.ActionSetResp {
+		t.Fatalf("unexpected action: %q", resp.Message.Action)
+	}
+
+	select {
+	case <-unmatched:
+		t.Fatalf("unexpected unmatched callback")
+	default:
+	}
+}
+
+func TestClient_SendAndAwait_NonVarStoreRespMajorCmdRejected(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	serverDone := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		codec := header.HeaderTcpCodec{}
+		reqHdr, _, err := codec.Decode(bufio.NewReader(conn))
+		if err != nil {
+			return
+		}
+
+		respPayload, _ := transport.EncodeMessage("login_resp", map[string]any{"code": 1, "msg": "ok"})
+		respHdr := (&header.HeaderTcp{}).
+			WithMajor(header.MajorCmd).
+			WithSubProto(reqHdr.SubProto()).
+			WithMsgID(reqHdr.GetMsgID()).
+			WithPayloadLength(uint32(len(respPayload)))
+		frame, _ := codec.Encode(respHdr, respPayload)
+		_, _ = conn.Write(frame)
+		<-serverDone
+	}()
+
+	unmatched := make(chan struct{}, 1)
+	client := NewClient(context.Background(),
+		func(_hdr core.IHeader, _payload []byte) { unmatched <- struct{}{} },
+		func(err error) { _ = err },
+	)
+	defer client.Close()
+
+	if err := client.Connect(ln.Addr().String()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+
+	reqPayload, _ := transport.EncodeMessage("login", map[string]any{"device_id": "d", "node_id": 1})
+	reqHdr := (&header.HeaderTcp{}).
+		WithMajor(header.MajorCmd).
+		WithSubProto(2).
+		WithSourceID(1).
+		WithTargetID(0).
+		WithMsgID(777)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	_, err = client.SendAndAwait(ctx, reqHdr, reqPayload, "login_resp")
+	close(serverDone)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected deadline exceeded, got %v", err)
+	}
+	select {
+	case <-unmatched:
+	case <-time.After(1 * time.Second):
+		t.Fatalf("expected unmatched callback")
 	}
 }
