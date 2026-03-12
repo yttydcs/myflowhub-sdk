@@ -18,7 +18,7 @@ func TestSessionSend_FillsDefaults(t *testing.T) {
 
 	sess := New(context.Background(), nil, nil)
 	sess.mu.Lock()
-	sess.conn = clientConn
+	sess.pipe = clientConn
 	sess.mu.Unlock()
 
 	payload := []byte("hello")
@@ -67,7 +67,7 @@ func TestSessionReadLoop_DispatchesFrames(t *testing.T) {
 	)
 
 	sess.mu.Lock()
-	sess.conn = clientConn
+	sess.pipe = clientConn
 	sess.mu.Unlock()
 	go sess.readLoop(clientConn)
 
