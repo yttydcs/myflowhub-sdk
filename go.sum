@@ -1,7 +1,7 @@
 github.com/godbus/dbus/v5 v5.2.2 h1:TUR3TgtSVDmjiXOgAAyaZbYmIeP3DPkld3jgKGV8mXQ=
 github.com/godbus/dbus/v5 v5.2.2/go.mod h1:3AAv2+hPq5rdnr5txxxRwiGjPXamgoIHgz9FPBfOp3c=
-github.com/yttydcs/myflowhub-core v0.3.1 h1:+chB9rAu/Jfq+0Bw8InAocCx65QgEg+BSscRtMS53/E=
-github.com/yttydcs/myflowhub-core v0.3.1/go.mod h1:v63nBnLGfsVLtrbnM9jeiTL+s5nWeCOJ9BWeoWtfwc8=
+github.com/yttydcs/myflowhub-core v0.4.0 h1:DEeoS7ED9r+booyIyA3pZm4vWCR0KTwDzboXw3P/qcM=
+github.com/yttydcs/myflowhub-core v0.4.0/go.mod h1:v63nBnLGfsVLtrbnM9jeiTL+s5nWeCOJ9BWeoWtfwc8=
 github.com/yttydcs/myflowhub-proto v0.1.1 h1:0oVHnHaYbrV6CWQ0mREWMwDDkkUBIpPMTtLw2TjJLY8=
 github.com/yttydcs/myflowhub-proto v0.1.1/go.mod h1:1shJnnAYNZYd1KnGNtvgdygTaeCyx5duMnxrRLRouOc=
 golang.org/x/sys v0.42.0 h1:omrd2nAlyT5ESRdCLYdm3+fMfNFE/+Rf4bDIQImRJeo=
