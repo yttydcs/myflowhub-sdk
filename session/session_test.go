@@ -2,7 +2,9 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -101,4 +103,54 @@ func TestSessionReadLoop_DispatchesFrames(t *testing.T) {
 	}
 
 	sess.Close()
+}
+
+type shortWritePipe struct {
+	buf   bytes.Buffer
+	limit int
+}
+
+func (p *shortWritePipe) Read([]byte) (int, error) { return 0, io.EOF }
+func (p *shortWritePipe) Write(b []byte) (int, error) {
+	n := len(b)
+	if p.limit > 0 && n > p.limit {
+		n = p.limit
+	}
+	if n > 0 {
+		_, _ = p.buf.Write(b[:n])
+	}
+	return n, nil
+}
+func (p *shortWritePipe) Close() error { return nil }
+
+func TestSessionSend_HandlesShortWritePipe(t *testing.T) {
+	pipe := &shortWritePipe{limit: 3}
+	sess := New(context.Background(), nil, nil)
+	sess.mu.Lock()
+	sess.pipe = pipe
+	sess.mu.Unlock()
+
+	payload := []byte("register-payload")
+	hdr := (&header.HeaderTcp{}).
+		WithMajor(header.MajorCmd).
+		WithSubProto(2).
+		WithSourceID(1).
+		WithTargetID(2).
+		WithMsgID(99).
+		WithTraceID(77)
+
+	if err := sess.Send(hdr, payload); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	gotHdr, gotPayload, err := (header.HeaderTcpCodec{}).Decode(bytes.NewReader(pipe.buf.Bytes()))
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if gotHdr.GetMsgID() != 99 {
+		t.Fatalf("msg_id mismatch: got=%d want=99", gotHdr.GetMsgID())
+	}
+	if string(gotPayload) != string(payload) {
+		t.Fatalf("payload mismatch: got=%q want=%q", gotPayload, payload)
+	}
 }

@@ -1,70 +1,100 @@
-# Plan - SDK：支持 `bt+rfcomm://`（Bluetooth Classic RFCOMM）Dial（对齐 TCP 能力）
+# Plan - SDK：修复客户端 RFCOMM 帧发送的短写问题
 
 ## Workflow 信息
 - Repo：`MyFlowHub-SDK`
-- 分支：`feat/bluetooth-rfcomm-transport`
-- Worktree：`d:\project\MyFlowHub3\worktrees\feat-bluetooth-rfcomm-transport\repo\MyFlowHub-SDK`
+- 分支：`fix/sdk-rfcomm-write-contract`
+- Worktree：`d:\project\MyFlowHub3\worktrees\fix-sdk-rfcomm-write-contract\repo\MyFlowHub-SDK`
 - Base：`main`
 - 依赖仓：
-  - `MyFlowHub-Core`：RFCOMM dial/endpoint（本分支新增）
+  - `MyFlowHub-Core`：提供统一写出契约与新版本 tag
 
-## 背景 / 问题陈述（事实，可审计）
-- SDK 当前 `Session.Connect(addr string)` 仅支持 TCP（`net.Dial("tcp")` + `net.Conn`）。
-- 需求：除 TCP 外，SDK 侧也应具备与 TCP 同等的“连接/收发帧”能力，使客户端可通过 RFCOMM 接入同一网络。
+## 项目目标与当前状态
+- 目标：
+  - 修复 SDK 客户端在 RFCOMM / 非 TCP 字节流上发送完整帧时未保证写满的问题；
+  - 让 SDK session 的发送语义与 Core 一致，避免 client/server 两端行为分叉；
+  - 为 Win 客户端 release 提供稳定依赖版本。
+- 当前状态：
+  - SDK `Session.Send` 直接执行一次 `pipe.Write(frame)`；
+  - 对 TCP 往往工作正常，但对 RFCOMM 这类可能短写的流不可靠；
+  - 实际表现为 Win 客户端连接成功后，register 帧发出但服务端无法稳定收到完整帧。
 
-## 目标
-1) 在不牺牲可维护性的前提下，让 SDK 支持通过 endpoint 进行连接：
-  - `tcp://host:port`（以及现有 `host:port` 兼容）
-  - `bt+rfcomm://<bdaddr>?uuid=...&channel=...&secure=...`
-2) 连接底座从 `net.Conn` 泛化为 `io.ReadWriteCloser`（或 `core.IPipe`），以适配非 TCP 承载。
-3) 保持上层 HeaderCodec/帧语义不变：仍使用 `HeaderTcpCodec` 对字节流进行 encode/decode。
+## 范围
+- 必须：
+  - 修复 SDK session 发送完整帧的短写风险；
+  - 若合适，复用与 Core 一致的写出辅助能力或等价实现；
+  - 补充 SDK 侧短写回归测试；
+  - 最终升级 `go.mod` 到修复后的 Core 版本。
+- 可选：
+  - 抽取本地最小写出辅助以减少重复逻辑。
+- 不做：
+  - 不修改公开连接地址格式；
+  - 不调整 await / auth 业务协议；
+  - 不扩展扫描设备名能力。
 
-## 非目标
-- 不实现“按设备名扫描/解析到 MAC”（由 transport 扩展点与平台实现负责）。
-- 不引入 payload 业务解析。
+## 可执行任务清单（Checklist）
 
-## 验收标准
-- `go test ./...` 通过（workflow-local go.work 下可联动 Core）。
-- 新增单测覆盖：
-  - endpoint 解析：tcp/bt+rfcomm、缺失参数、非法 uuid/channel/bdaddr 等。
-  - Session 关闭/重连/并发 Send 的基本边界。
-- 若引入 breaking change（如公开 API 签名调整），必须在 `docs/change` 中明确标注并给迁移示例。
-
-## 3.1) 计划拆分（Checklist）
-
-### SDK-BT0 - 归档旧 plan（已执行）
-- 已执行：`git mv plan.md docs/plan_archive/plan_archive_2026-03-12_bluetooth-rfcomm-transport-sdk-prev.md`
-
-### SDK-BT1 - 依赖升级：对齐 Core（含 RFCOMM 能力）
-- 目标：升级 `go.mod` 的 `myflowhub-core` 到包含 RFCOMM 的版本；开发期通过 workflow-local go.work 联动，最终确保 `GOWORK=off` 可用。
-- 涉及文件：`go.mod`、`go.sum`
-- 验收条件：`GOWORK=off go test ./...` 可编译（需要 Core 发布版本后执行）。
-- 回滚点：revert。
-
-### SDK-BT2 - 引入 endpoint connect（tcp + bt+rfcomm）
-- 目标：新增 `ConnectEndpoint(endpoint string)`（或等价）并保持现有 `Connect(addr string)` 行为不回归。
-- 涉及文件（预期）：
+### SDK-RFCOMM-1 - 修复 Session.Send 的整帧写出
+- 目标：
+  - 保证 SDK 在发送 `HeaderTcp` 帧时，即使底层 `Write` 短写，也能完整写完。
+- 涉及模块 / 文件：
   - `session/session.go`
-  - `session/endpoint*.go`（如拆分）
+  - 可能新增共享写出辅助文件
 - 验收条件：
-  - tcp 路径与现有一致；
-  - bt+rfcomm 能进入 dial 路径并在无真实环境下返回可读错误（由 Core 实现提供）。
-- 回滚点：revert。
+  - `Session.Send` 不再依赖单次 `Write`；
+  - 保持现有 `Connect` / `ConnectEndpoint` / `readLoop` 行为不变。
+- 测试点：
+  - fake short writer 覆盖；
+  - session 关键路径测试通过。
+- 回滚点：
+  - 回退 session 发送实现。
 
-### SDK-BT3 - Session 底座抽象（io.ReadWriteCloser / Pipe）
-- 目标：内部不再强依赖 `net.Conn`，读写循环使用 `io.Reader/io.Writer`。
-- 性能注意：
-  - 避免每帧重复分配；必要时复用 bufio.Reader。
-- 验收条件：`go test ./...` 通过；Close 不泄漏 goroutine。
-- 回滚点：revert。
+### SDK-RFCOMM-2 - 升级 Core 依赖并对齐版本
+- 目标：
+  - 将 SDK 依赖的 `myflowhub-core` 升级到包含写出修复的新版本。
+- 涉及模块 / 文件：
+  - `go.mod`
+  - `go.sum`
+- 验收条件：
+  - `go list -m github.com/yttydcs/myflowhub-core` 指向修复版本；
+  - `GOWORK=off` 下可解析依赖。
+- 测试点：
+  - `go mod tidy`
+  - `GOWORK=off go test ./... -count=1`
+- 回滚点：
+  - 回退依赖版本与 `go.sum`。
 
-### SDK-BT4 - Code Review（强制）
-- 审查项：需求覆盖/架构/性能/可读性/扩展性/稳定性与安全/测试覆盖。
+### SDK-RFCOMM-3 - Code Review（强制）
+- 目标：
+  - 逐项审查需求覆盖、架构一致性、性能影响、稳定性与测试覆盖。
+- 涉及模块 / 文件：
+  - 本 workflow 全部改动文件
+- 验收条件：
+  - 形成逐项通过/不通过结论；
+  - 必要时返回实现阶段修正。
+- 测试点：
+  - Review 结论完整。
+- 回滚点：
+  - 修订实现或取消发版。
 
-### SDK-BT5 - 归档变更（强制）
-- 输出：`docs/change/2026-03-12_bluetooth-rfcomm-transport-sdk.md`
-- 标注：重大变更（SDK transport 能力扩展；可能涉及连接抽象变更）。
+### SDK-RFCOMM-4 - 归档与发版准备
+- 目标：
+  - 生成独立归档文档，并准备 SDK patch 发布。
+- 涉及模块 / 文件：
+  - `docs/change/2026-03-15_sdk-rfcomm-write-contract-fix.md`
+- 验收条件：
+  - 文档可独立说明背景、修改、验证、影响与回滚；
+  - 明确该修复面向 RFCOMM 与未来非 TCP 字节流。
+- 测试点：
+  - 归档文档完整可审计。
+- 回滚点：
+  - 回退归档文档。
 
-### SDK-BT6 - 合并 / push（需 workflow 结束后执行）
-- 在 `repo/MyFlowHub-SDK` 合并到 `main` 并 push。
+## 依赖关系
+- `SDK-RFCOMM-1` 完成后进入 `SDK-RFCOMM-2`
+- `SDK-RFCOMM-2` 完成后进入 `SDK-RFCOMM-3`
+- `SDK-RFCOMM-3` 通过后进入 `SDK-RFCOMM-4`
 
+## 风险与注意事项
+- SDK 不应复制 Core 的整套帧写出实现到过重程度，避免双份维护；
+- 但在版本发布顺序上，SDK 仍需先能引用到新的 Core tag；
+- 需要保持对 TCP 的完全兼容，不改变上层 API 与日志语义。

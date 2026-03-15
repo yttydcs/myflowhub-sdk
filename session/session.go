@@ -152,8 +152,7 @@ func (s *Session) Send(hdr core.IHeader, payload []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = pipe.Write(frame)
-	return err
+	return core.WriteAll(pipe, frame)
 }
 
 func (s *Session) readLoop(pipe io.ReadWriteCloser) {
