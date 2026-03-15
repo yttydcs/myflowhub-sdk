@@ -121,11 +121,12 @@ func (s *Session) Close() {
 	cancel := s.cancel
 	s.mu.Unlock()
 
-	if pipe != nil {
-		_ = pipe.Close()
-	}
+	// 先取消上下文，再关闭底层 pipe，避免 readLoop 在断开场景误上报 onError。
 	if cancel != nil {
 		cancel()
+	}
+	if pipe != nil {
+		_ = pipe.Close()
 	}
 }
 

@@ -79,7 +79,15 @@ func (c *Client) Connect(addr string) error {
 	if c == nil || c.sess == nil {
 		return ErrClientNotInitialized
 	}
-	return c.sess.Connect(addr)
+	if err := c.sess.Connect(addr); err != nil {
+		return err
+	}
+	if c.broker == nil {
+		c.broker = NewBroker()
+	} else {
+		c.broker.Reopen()
+	}
+	return nil
 }
 
 func (c *Client) Close() {

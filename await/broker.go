@@ -201,3 +201,22 @@ func (b *Broker) Close(err error) {
 		close(ch)
 	}
 }
+
+// Reopen clears closed state so the broker can be reused after a reconnect.
+// It does not recreate any waiter; callers should only use it when no active waiters are expected.
+func (b *Broker) Reopen() {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.closed = false
+	b.closeErr = nil
+	if b.waiters == nil {
+		b.waiters = make(map[Key]chan Result)
+	}
+	if b.byMsgSub == nil {
+		b.byMsgSub = make(map[msgSubKey]int)
+	}
+}

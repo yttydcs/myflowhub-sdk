@@ -154,3 +154,26 @@ func TestSessionSend_HandlesShortWritePipe(t *testing.T) {
 		t.Fatalf("payload mismatch: got=%q want=%q", gotPayload, payload)
 	}
 }
+
+func TestSessionClose_DoesNotReportOnError(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer serverConn.Close()
+
+	errCh := make(chan error, 1)
+	sess := New(context.Background(), nil, func(err error) {
+		errCh <- err
+	})
+
+	sess.mu.Lock()
+	sess.pipe = clientConn
+	sess.mu.Unlock()
+	go sess.readLoop(clientConn)
+
+	sess.Close()
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("unexpected onError during close: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+}

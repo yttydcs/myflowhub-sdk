@@ -136,6 +136,43 @@ func TestBroker_DeliverNoWaiter(t *testing.T) {
 	}
 }
 
+func TestBroker_ReopenAfterClose(t *testing.T) {
+	b := NewBroker()
+	k := Key{MsgID: 10, SubProto: 2, Action: "login_resp"}
+
+	ch, _, err := b.Register(k)
+	if err != nil {
+		t.Fatalf("register before close: %v", err)
+	}
+	b.Close(errors.New("network down"))
+
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatalf("waiter should be closed on broker close")
+	}
+
+	if _, _, err := b.Register(k); err == nil {
+		t.Fatalf("register should fail on closed broker")
+	}
+
+	b.Reopen()
+
+	ch2, cancel2, err := b.Register(k)
+	if err != nil {
+		t.Fatalf("register after reopen: %v", err)
+	}
+	cancel2()
+	select {
+	case _, ok := <-ch2:
+		if ok {
+			t.Fatalf("channel should be closed after cancel")
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("channel should close after cancel")
+	}
+}
+
 func TestBroker_KeyValidation(t *testing.T) {
 	b := NewBroker()
 	if _, _, err := b.Register(Key{}); !errors.Is(err, ErrKeyInvalid) {

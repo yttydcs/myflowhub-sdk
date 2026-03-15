@@ -449,3 +449,67 @@ func TestClient_SendAndAwait_NonVarStoreRespMajorCmdRejected(t *testing.T) {
 		t.Fatalf("expected unmatched callback")
 	}
 }
+
+func TestClient_ReconnectAfterClose_CanSendAndAwait(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 2; i++ {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			codec := header.HeaderTcpCodec{}
+			reqHdr, _, err := codec.Decode(bufio.NewReader(conn))
+			if err == nil {
+				respPayload, _ := transport.EncodeMessage("login_resp", map[string]any{"code": 1, "msg": "ok"})
+				respHdr := (&header.HeaderTcp{}).
+					WithMajor(header.MajorOKResp).
+					WithSubProto(reqHdr.SubProto()).
+					WithSourceID(reqHdr.TargetID()).
+					WithTargetID(reqHdr.SourceID()).
+					WithMsgID(reqHdr.GetMsgID()).
+					WithPayloadLength(uint32(len(respPayload)))
+				frame, _ := codec.Encode(respHdr, respPayload)
+				_, _ = conn.Write(frame)
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	client := NewClient(context.Background(), nil, func(err error) { _ = err })
+
+	reqPayload, _ := transport.EncodeMessage("login", map[string]any{"device_id": "d", "node_id": 1})
+	sendOnce := func() {
+		if err := client.Connect(ln.Addr().String()); err != nil {
+			t.Fatalf("connect: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		reqHdr := (&header.HeaderTcp{}).
+			WithMajor(header.MajorCmd).
+			WithSubProto(2).
+			WithSourceID(1).
+			WithTargetID(0)
+		if _, err := client.SendAndAwait(ctx, reqHdr, reqPayload, "login_resp"); err != nil {
+			t.Fatalf("send and await: %v", err)
+		}
+	}
+
+	sendOnce()
+	client.Close()
+	sendOnce()
+	client.Close()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("server loop timeout")
+	}
+}
