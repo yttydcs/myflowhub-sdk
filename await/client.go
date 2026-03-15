@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -132,7 +133,7 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 	}
 	defer cancel()
 
-	if err := c.sess.Send(hdr, payload); err != nil {
+	if err := c.sendWithContext(ctx, hdr, payload); err != nil {
 		return Response{}, err
 	}
 
@@ -158,6 +159,45 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 		default:
 		}
 		return Response{}, ctx.Err()
+	}
+}
+
+func (c *Client) sendWithContext(ctx context.Context, hdr core.IHeader, payload []byte) error {
+	if ctx == nil {
+		return c.sess.Send(hdr, payload)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	sendDone := make(chan error, 1)
+	go func() {
+		sendDone <- c.sess.Send(hdr, payload)
+	}()
+
+	select {
+	case err := <-sendDone:
+		return err
+	case <-ctx.Done():
+		// 若发送卡在底层 socket 写入，主动关闭 session 以中断阻塞写，避免 UI/调用链永久挂起。
+		// 仅在 send 尚未返回时触发该兜底路径。
+		select {
+		case err := <-sendDone:
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
+		default:
+		}
+
+		c.sess.Close()
+		select {
+		case err := <-sendDone:
+			if err != nil {
+				return err
+			}
+		case <-time.After(250 * time.Millisecond):
+		}
+		return fmt.Errorf("send canceled before write completed: %w", ctx.Err())
 	}
 }
 
