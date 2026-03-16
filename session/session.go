@@ -17,6 +17,7 @@ import (
 
 	core "github.com/yttydcs/myflowhub-core"
 	"github.com/yttydcs/myflowhub-core/header"
+	"github.com/yttydcs/myflowhub-core/listener/quic_listener"
 	"github.com/yttydcs/myflowhub-core/listener/rfcomm_listener"
 )
 
@@ -83,6 +84,7 @@ func (s *Session) Connect(addr string) error {
 // Supported:
 // - tcp: "127.0.0.1:9000" (legacy) or "tcp://127.0.0.1:9000"
 // - rfcomm: "bt+rfcomm://AA:BB:CC:DD:EE:FF?uuid=...&channel=...&secure=true"
+// - quic: "quic://host:port?server_name=...&alpn=myflowhub&pin_sha256=..."
 func (s *Session) ConnectEndpoint(endpoint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,6 +230,27 @@ func (s *Session) dialEndpointLocked(endpoint string) (pipe io.ReadWriteCloser, 
 		if pipe == nil {
 			_ = conn.Close()
 			return nil, "", "", errors.New("rfcomm dial returned nil pipe")
+		}
+		localAddr := ""
+		remoteAddr := ""
+		if conn.LocalAddr() != nil {
+			localAddr = conn.LocalAddr().String()
+		}
+		if conn.RemoteAddr() != nil {
+			remoteAddr = conn.RemoteAddr().String()
+		}
+		return pipe, localAddr, remoteAddr, nil
+	case quic_listener.EndpointSchemeQUIC:
+		cctx, cancel := context.WithTimeout(s.ctx, 8*time.Second)
+		defer cancel()
+		conn, err := quic_listener.DialEndpoint(cctx, endpoint)
+		if err != nil {
+			return nil, "", "", err
+		}
+		pipe := conn.Pipe()
+		if pipe == nil {
+			_ = conn.Close()
+			return nil, "", "", errors.New("quic dial returned nil pipe")
 		}
 		localAddr := ""
 		remoteAddr := ""
