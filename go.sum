@@ -8,10 +8,10 @@ github.com/quic-go/quic-go v0.59.0 h1:OLJkp1Mlm/aS7dpKgTc6cnpynnD2Xg7C1pwL6vy/SA
 github.com/quic-go/quic-go v0.59.0/go.mod h1:upnsH4Ju1YkqpLXC305eW3yDZ4NfnNbmQRCMWS58IKU=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/yttydcs/myflowhub-core v0.4.9 h1:8IiqTrtTjY1QifWmGzaBA1+kTxoaAQYQL7/WR69D/eo=
-github.com/yttydcs/myflowhub-core v0.4.9/go.mod h1:/XfiiRJgVlnEe9Eo2ug0yn4l9x7k3+wq+3GJXZkJzUU=
-github.com/yttydcs/myflowhub-proto v0.1.5 h1:WqIf/5DFq8lxYXdLEcghZeJucu9u/5OfBKcx2mrYsOI=
-github.com/yttydcs/myflowhub-proto v0.1.5/go.mod h1:1shJnnAYNZYd1KnGNtvgdygTaeCyx5duMnxrRLRouOc=
+github.com/yttydcs/myflowhub-core v0.4.10 h1:3tXi8SBo7YBQLWWhdKrcI7LwgLoX3CIKbCEA1/RWMWc=
+github.com/yttydcs/myflowhub-core v0.4.10/go.mod h1:/XfiiRJgVlnEe9Eo2ug0yn4l9x7k3+wq+3GJXZkJzUU=
+github.com/yttydcs/myflowhub-proto v0.1.7 h1:EjFbNgR6djGIOYxaGV0j6EOKFu9sme/OlbLiTLtE9gI=
+github.com/yttydcs/myflowhub-proto v0.1.7/go.mod h1:1shJnnAYNZYd1KnGNtvgdygTaeCyx5duMnxrRLRouOc=
 go.uber.org/mock v0.5.2 h1:LbtPTcP8A5k9WPXj54PPPbjcI4Y6lhyOZXn+VS7wNko=
 go.uber.org/mock v0.5.2/go.mod h1:wLlUxC2vVTPTaE3UD51E0BGOAElKrILxhVSDYQLld5o=
 golang.org/x/crypto v0.41.0 h1:WKYxWedPGCTVVl5+WHSSrOBT0O8lx32+zxmHxijgXp4=
