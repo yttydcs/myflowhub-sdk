@@ -1,5 +1,7 @@
 package await
 
+// Context: This file provides shared client-side SDK behavior around broker.
+
 import (
 	"errors"
 	"strings"

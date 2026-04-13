@@ -1,5 +1,7 @@
 package transport
 
+// Context: This file provides shared client-side SDK behavior around message_test.
+
 import (
 	"encoding/json"
 	"testing"
