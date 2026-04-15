@@ -1,6 +1,6 @@
 package await
 
-// Context: This file provides shared client-side SDK behavior around client.
+// 本文件承载 SDK 客户端侧中与 `client` 相关的通用逻辑。
 
 import (
 	"context"
@@ -30,6 +30,7 @@ var (
 var msgSeq atomic.Uint32
 var msgSeqInit sync.Once
 
+// nextMsgID 为 send-and-await 场景生成非零请求号，避免调用方忘记填 MsgID。
 func nextMsgID() uint32 {
 	msgSeqInit.Do(func() {
 		var seed [4]byte
@@ -58,6 +59,7 @@ type Client struct {
 	onError     func(error)
 }
 
+// NewClient 组装 `session + broker`，并把底层收帧统一接到 await 匹配逻辑。
 func NewClient(ctx context.Context, onUnmatched func(core.IHeader, []byte), onError func(error)) *Client {
 	c := &Client{
 		broker:      NewBroker(),
@@ -77,6 +79,7 @@ func (c *Client) SetOnFrame(onFrame func(core.IHeader, []byte)) {
 	c.onFrame = onFrame
 }
 
+// Connect 建立到底层 Session 的连接，并在成功后重置 Broker 的关闭态。
 func (c *Client) Connect(addr string) error {
 	if c == nil || c.sess == nil {
 		return ErrClientNotInitialized
@@ -92,6 +95,7 @@ func (c *Client) Connect(addr string) error {
 	return nil
 }
 
+// Close 关闭底层 Session，并唤醒所有仍在等待的请求。
 func (c *Client) Close() {
 	if c == nil {
 		return
@@ -104,6 +108,7 @@ func (c *Client) Close() {
 	}
 }
 
+// Send 暴露不带等待语义的原始发送能力，供上层复用同一个连接通道。
 func (c *Client) Send(hdr core.IHeader, payload []byte) error {
 	if c == nil || c.sess == nil {
 		return ErrClientNotInitialized
@@ -172,6 +177,7 @@ func (c *Client) SendAndAwait(ctx context.Context, hdr core.IHeader, payload []b
 	}
 }
 
+// sendWithContext 为发送阶段补上 cancel/timeout 兜底，避免底层写阻塞把调用链卡死。
 func (c *Client) sendWithContext(ctx context.Context, hdr core.IHeader, payload []byte) error {
 	if ctx == nil {
 		return c.sess.Send(hdr, payload)
@@ -211,6 +217,7 @@ func (c *Client) sendWithContext(ctx context.Context, hdr core.IHeader, payload 
 	}
 }
 
+// handleFrame 只在存在等待者时尝试解包响应，并把未匹配帧继续交给上层。
 func (c *Client) handleFrame(hdr core.IHeader, payload []byte) {
 	if hdr == nil || c == nil || c.broker == nil {
 		return
@@ -264,6 +271,7 @@ func (c *Client) handleFrame(hdr core.IHeader, payload []byte) {
 	}
 }
 
+// handleError 将底层读写错误扩散给全部等待者，并通知上层错误回调。
 func (c *Client) handleError(err error) {
 	if err == nil || c == nil {
 		return

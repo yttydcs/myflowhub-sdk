@@ -1,6 +1,6 @@
 package transport
 
-// Context: This file provides shared client-side SDK behavior around message.
+// 本文件承载 SDK 客户端侧中与 `message` 相关的通用逻辑。
 
 import (
 	"bytes"
@@ -19,6 +19,7 @@ var (
 	ErrPayloadEmpty   = errors.New("payload is empty")
 )
 
+// EncodeMessage 将 action/data 封装成统一的 JSON envelope。
 func EncodeMessage(action string, data any) ([]byte, error) {
 	action = strings.TrimSpace(action)
 	if action == "" {
@@ -37,6 +38,7 @@ func EncodeMessage(action string, data any) ([]byte, error) {
 	return json.Marshal(wire)
 }
 
+// DecodeMessage 只解出 action 与原始 data，避免框架层过早做二次反序列化。
 func DecodeMessage(payload []byte) (Message, error) {
 	if len(bytes.TrimSpace(payload)) == 0 {
 		return Message{}, ErrPayloadEmpty

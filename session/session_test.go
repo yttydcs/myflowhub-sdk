@@ -1,6 +1,6 @@
 package session
 
-// Context: This file provides shared client-side SDK behavior around session_test.
+// 本文件覆盖 SDK 客户端侧中与 `session` 相关的行为。
 
 import (
 	"bufio"

@@ -1,6 +1,6 @@
 package session
 
-// Context: This file provides shared client-side SDK behavior around session.
+// 本文件承载 SDK 客户端侧中与 `session` 相关的通用逻辑。
 
 import (
 	"bufio"
@@ -31,6 +31,7 @@ var (
 var traceSeq atomic.Uint32
 var traceSeqInit sync.Once
 
+// nextTraceID 为未显式设置 trace_id 的请求补一个稳定的非零追踪号。
 func nextTraceID() uint32 {
 	traceSeqInit.Do(func() {
 		var seed [4]byte
@@ -61,6 +62,7 @@ type Session struct {
 	onError func(error)
 }
 
+// New 创建 Session，并预先绑定读帧与错误回调。
 func New(ctx context.Context, onFrame func(core.IHeader, []byte), onError func(error)) *Session {
 	if ctx == nil {
 		ctx = context.Background()
@@ -76,17 +78,13 @@ func New(ctx context.Context, onFrame func(core.IHeader, []byte), onError func(e
 	}
 }
 
+// Connect 保留旧接口语义，把裸 `host:port` 当作 TCP endpoint 处理。
 func (s *Session) Connect(addr string) error {
 	// Backward compatible: Connect() keeps "tcp host:port" behavior.
 	return s.ConnectEndpoint(addr)
 }
 
-// ConnectEndpoint connects to an endpoint.
-//
-// Supported:
-// - tcp: "127.0.0.1:9000" (legacy) or "tcp://127.0.0.1:9000"
-// - rfcomm: "bt+rfcomm://AA:BB:CC:DD:EE:FF?uuid=...&channel=...&secure=true"
-// - quic: "quic://host:port?server_name=...&alpn=myflowhub&pin_sha256=..."
+// ConnectEndpoint 根据 endpoint scheme 拨号，并把底层流挂到当前 Session。
 func (s *Session) ConnectEndpoint(endpoint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -116,6 +114,7 @@ func (s *Session) ConnectEndpoint(endpoint string) error {
 	return nil
 }
 
+// Close 先取消上下文再关闭底层流，避免正常断开被误判成异常读错。
 func (s *Session) Close() {
 	s.mu.Lock()
 	pipe := s.pipe
@@ -134,6 +133,7 @@ func (s *Session) Close() {
 	}
 }
 
+// Send 统一补齐 hop_limit 与 trace_id 后写出完整帧。
 func (s *Session) Send(hdr core.IHeader, payload []byte) error {
 	s.mu.Lock()
 	pipe := s.pipe
@@ -160,6 +160,7 @@ func (s *Session) Send(hdr core.IHeader, payload []byte) error {
 	return core.WriteAll(pipe, frame)
 }
 
+// readLoop 连续解码底层流中的帧，并把结果分发给上层回调。
 func (s *Session) readLoop(pipe io.ReadWriteCloser) {
 	reader := bufio.NewReader(pipe)
 	for {
@@ -186,6 +187,7 @@ func (s *Session) readLoop(pipe io.ReadWriteCloser) {
 	}
 }
 
+// String 输出当前连接状态，便于日志与调试快速确认链路方向。
 func (s *Session) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -200,6 +202,7 @@ func (s *Session) String() string {
 	return fmt.Sprintf("Session(%s -> %s)", local, remote)
 }
 
+// dialEndpointLocked 在持锁状态下解析 endpoint，并选择对应的 transport dialer。
 func (s *Session) dialEndpointLocked(endpoint string) (pipe io.ReadWriteCloser, local string, remote string, err error) {
 	endpoint = strings.TrimSpace(endpoint)
 	if endpoint == "" {
@@ -268,6 +271,7 @@ func (s *Session) dialEndpointLocked(endpoint string) (pipe io.ReadWriteCloser, 
 	}
 }
 
+// dialTCP 负责旧版 TCP 直连路径，并返回可读写流与地址摘要。
 func (s *Session) dialTCP(addr string) (pipe io.ReadWriteCloser, local string, remote string, err error) {
 	dialer := net.Dialer{Timeout: 5 * time.Second}
 	conn, err := dialer.DialContext(s.ctx, "tcp", addr)

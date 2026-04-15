@@ -1,6 +1,6 @@
 package await
 
-// Context: This file provides shared client-side SDK behavior around broker.
+// 本文件承载 SDK 客户端侧中与 `broker` 相关的通用逻辑。
 
 import (
 	"errors"
@@ -51,6 +51,7 @@ type Broker struct {
 	byMsgSub map[msgSubKey]int
 }
 
+// NewBroker 创建一个新的等待器注册表。
 func NewBroker() *Broker {
 	return &Broker{
 		waiters:  make(map[Key]chan Result),
@@ -58,6 +59,7 @@ func NewBroker() *Broker {
 	}
 }
 
+// normalizeKey 清理并校验等待键，确保后续索引逻辑稳定。
 func normalizeKey(key Key) (Key, error) {
 	key.Action = strings.TrimSpace(key.Action)
 	if key.MsgID == 0 || key.Action == "" {
@@ -204,8 +206,8 @@ func (b *Broker) Close(err error) {
 	}
 }
 
-// Reopen clears closed state so the broker can be reused after a reconnect.
-// It does not recreate any waiter; callers should only use it when no active waiters are expected.
+// Reopen 清理关闭态，供重连后的 client 复用同一个 Broker 实例。
+// 它不会恢复旧等待者，因此只能在确认没有活跃等待时调用。
 func (b *Broker) Reopen() {
 	if b == nil {
 		return
